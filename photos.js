@@ -18,6 +18,12 @@ const NOT_A_PHOTO = /\b(maps?|plans?|posters?|logos?|coat of arms|flags?|stamps?
 const PHOTO_HINT = /\b(photo|photos|photograph|photographs|photography|negative|glass plate|fortepan|bain news|nationaal archief|anefo|bundesarchiv|press photo|snapshot|street scene|black and white photographs|photochrom)\b/i;
 // Everyday-life scenes make the best rounds
 const SCENE_HINT = /\b(street|streets|road|square|market|people|crowd|traffic|cars?|bus(es)?|trams?|trains?|station|shops?|caf[eé]|beach|harbou?r|port|bridge|parade|festival|children|bicycles?|cyclists?|avenue|boulevard|corner|pedestrians?|demonstration|celebration|night|winter|snow)\b/i;
+// Photos that are really about one person's face (portraits, politicians, speakers, actors...) are boring rounds
+const PEOPLE_FOCUS = /\b(portraits?|headshots?|selfies?|close-?ups?|mugshots?|politicians?|ministers?|prime minister|presidents? of|mayors? of|members? of (the )?parliament|senators?|ambassadors?|diplomats?|delegations?|press conferences?|conferences?|congress(es)? of|summits?|meetings?|interviews?|speeches|speaking|speakers?|lectures?|panel discussions?|award ceremon(y|ies)|awards?|prizes?|signing|actors?|actresses|singers?|musicians?|footballers?|athletes?|celebrit(y|ies)|wikimedians?|wikipedians?|editathons?|people of|men of|women of|men in suits|groepsportret|group photo)\b/i;
+// Streets, shops, crowds, weather, famous places: what the game is about
+const KEEP_HINT = /\b(tower|cathedral|church|palace|castle|monument|memorial|museum|skyline|panorama|view of|views of|cityscape|aerial|landmark|canal|river|park|garden|fountain|buildings?|architecture|facade|houses|shopfront|storefront|metro|subway|airport|rain|fog|quay|waterfront|town hall|city hall|opera|theatre|theater|hotel|restaurant|bar|harbour|harbor)\b/i;
+// Portraits are almost always upright; city scenes are wide
+const isWide = (w, h) => w && h ? w / h >= 1.15 : true;
 const OK_LICENSE = /public domain|^pd\b|pd-|cc0|cc[ -]?by/i;
 const BAD_LICENSE = /\bnc\b|\bnd\b|non-?commercial|no ?deriv/i;
 
@@ -62,7 +68,7 @@ function toCandidates(d, year) {
       dto: stripHtml(m.DateTimeOriginal?.value), desc: stripHtml(m.ImageDescription?.value || m.ObjectName?.value).slice(0, 200), cats
     };
   }).filter(Boolean)
-    .filter(c => c.mime === "image/jpeg" && c.w >= 900 && c.h >= 600 && c.w / c.h < 2.2 && c.h / c.w < 1.5)
+    .filter(c => c.mime === "image/jpeg" && c.w >= 900 && c.h >= 600 && c.w / c.h < 2.2 && isWide(c.w, c.h))
     .filter(c => /^https:\/\/upload\.wikimedia\.org\//.test(c.thumb) || (!!process.env.COMMONS_API && !!c.thumb))
     .filter(c => OK_LICENSE.test(c.lic) && !BAD_LICENSE.test(c.lic))
     .map(c => {
@@ -71,7 +77,8 @@ function toCandidates(d, year) {
       const isPhoto = PHOTO_HINT.test(text) || cameraTime || /\bphotographer\b/i.test(c.artist);
       const yearOk = (() => { const y = (c.dto.match(/\b(18|19|20)\d{2}\b/) || [])[0]; return !y || Math.abs(Number(y) - year) <= 1; })();
       const score = (SCENE_HINT.test(text) ? 2 : 0) + (cameraTime ? 1 : 0) + (/fortepan|bain news|nationaal archief|anefo/i.test(text) ? 1 : 0);
-      return { ...c, ok: isPhoto && yearOk && !NOT_A_PHOTO.test(text), score };
+      const scene = SCENE_HINT.test(text) || KEEP_HINT.test(text);
+      return { ...c, ok: isPhoto && yearOk && !NOT_A_PHOTO.test(text) && !PEOPLE_FOCUS.test(text) && scene, score };
     })
     .filter(c => c.ok);
 }
@@ -128,4 +135,30 @@ async function growBank(bank, count, { onFound = () => {}, shouldStop = () => fa
   return added;
 }
 
-module.exports = { growBank, status, shuffle };
+/**
+ * Looks again at every photo already in the bank (only the text about it on Wikimedia, no pictures are downloaded)
+ * and returns the ones that are close-ups of people: upright portraits, politicians, speakers, actors...
+ */
+async function checkBank(bank, { log = () => {}, onProgress = () => {} } = {}) {
+  const bad = [];
+  for (let i = 0; i < bank.length; i += 20) {
+    const part = bank.slice(i, i + 20);
+    const d = await commons({ action: "query", pageids: part.map(p => p.id).join("|"), ...INFO });
+    const pages = new Map((d?.query?.pages || []).map(pg => [String(pg.pageid), pg]));
+    for (const p of part) {
+      const pg = pages.get(String(p.id));
+      if (!pg || pg.missing || !pg.imageinfo) { bad.push({ p, why: "no longer on Wikimedia" }); continue; }
+      const ii = pg.imageinfo[0], m = ii.extmetadata || {};
+      const cats = [stripHtml(m.Categories?.value), ...(pg.categories || []).map(c => String(c.title || "").replace(/^Category:/, ""))].join(" | ");
+      const text = String(pg.title || "") + " " + stripHtml(m.ImageDescription?.value || m.ObjectName?.value) + " " + cats + " " + (p.caption || "");
+      const hit = text.match(PEOPLE_FOCUS);
+      if (!isWide(ii.width, ii.height)) bad.push({ p, why: "upright (portrait shape)" });
+      else if (hit) bad.push({ p, why: "about people: " + hit[0] });
+      else { p.w = ii.width; p.h = ii.height; }
+    }
+    onProgress(Math.min(bank.length, i + 20), bank.length);
+  }
+  return bad;
+}
+
+module.exports = { growBank, checkBank, status, shuffle };
