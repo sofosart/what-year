@@ -111,6 +111,9 @@ input.t::placeholder{color:#a49bc4;font-weight:600}
 .timebar{flex:1 1 120px;min-width:0;height:20px;border:var(--line);border-radius:999px;background:#fff;overflow:hidden;position:relative;box-shadow:var(--pop-s)}
 .timebar i{position:absolute;inset:0;transform-origin:left;background:var(--pink)}
 .secs{font-family:var(--display);font-size:24px;min-width:2ch;text-align:right;font-variant-numeric:tabular-nums}
+.secs.hurry{color:var(--pink);animation:beat 1s ease-out infinite}
+@keyframes beat{0%{transform:scale(1.3)}40%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.secs.hurry{animation:none}}
 .stage{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:26px;align-items:start}
 @media (max-width:860px){.stage{grid-template-columns:1fr}}
 .photo{background:#fff;border:var(--line);border-radius:10px;padding:12px 12px 48px;box-shadow:var(--pop);transform:rotate(-1deg);position:relative;margin:0;min-width:0}
@@ -139,10 +142,9 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
 .decades button:disabled{cursor:not-allowed}
 .decades button:disabled:not([aria-checked="true"]){opacity:.5}
 .top-right{display:flex;align-items:center;gap:10px}
-.sound-btn{width:44px;padding-left:0;padding-right:0;display:inline-grid;place-items:center}
-.sound-btn svg{width:22px;height:22px}
-.sound-btn[aria-pressed="false"] .waves{display:none}
-.sound-btn[aria-pressed="true"] .mute{display:none}
+.sound-btn{width:46px;height:46px;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:0}
+.sound-btn svg{display:block;height:18px;width:auto;flex:none}
+.sound-btn[aria-pressed="false"] .ic-on,.sound-btn[aria-pressed="true"] .ic-off{display:none}
 @media (max-width:480px){.top-right .chip{display:none}}
 .modal{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:20px;background:rgba(28,18,64,.55)}
 .modal-card{width:100%;max-width:440px;display:flex;flex-direction:column;gap:16px;text-align:center}
@@ -205,8 +207,8 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
   .logo{font-size:21px}
   .logo .q{width:28px;height:28px;font-size:19px}
   .btn.small{font-size:14px;padding:6px 11px}
-  .sound-btn{width:38px}
-  .sound-btn svg{width:19px;height:19px}
+  .sound-btn{width:38px;height:38px}
+  .sound-btn svg{height:15px}
   .round-top{gap:10px;margin-bottom:10px}
   .round-top .chip{font-size:13px;padding:3px 10px}
   .timebar{height:14px}
@@ -279,7 +281,7 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
 <div class="wrap">
   <header class="top">
     <div class="logo">WHAT YEAR<span class="q">?</span></div>
-    <span class="top-right"><button class="btn white small sound-btn" id="soundBtn" type="button" aria-pressed="true" aria-label="Sound" title="Sound on/off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><g class="waves"><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></g><g class="mute"><path d="M17 9l5 5M22 9l-5 5"/></g></svg></button><span class="chip" id="tableChip" hidden></span><button class="btn white small" id="exitBtn" type="button" hidden>Exit game</button></span>
+    <span class="top-right"><button class="btn white small sound-btn" id="soundBtn" type="button" aria-pressed="true" aria-label="Sound" title="Sound on/off"><svg class="ic-on" viewBox="2.8 3.8 19.9 16.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg><svg class="ic-off" viewBox="2.8 3.8 20.4 16.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M17 9l5 5M22 9l-5 5"/></svg></button><span class="chip" id="tableChip" hidden></span><button class="btn white small" id="exitBtn" type="button" hidden>Exit game</button></span>
   </header>
 
   <!-- HOME -->
@@ -427,6 +429,14 @@ function tone(c, freq, at, dur, {type = "triangle", vol = .18, to = 0} = {}){
   if (to) o.frequency.exponentialRampToValueAtTime(to, at + dur);
   g.gain.setValueAtTime(.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + .012); g.gain.exponentialRampToValueAtTime(.0001, at + dur);
   o.connect(g); g.connect(c.destination); o.start(at); o.stop(at + dur + .03);
+}
+// the clock: tick, tock, tick... and a sharper beep in the last 5 seconds
+let tickSide = 0;
+function playTick(hurry){
+  const c = audio(); if (!c) return; const t = c.currentTime; tickSide ^= 1;
+  if (hurry){ tone(c, 1480, t, .07, {type:"square", vol:.06}); tone(c, 880, t, .09, {type:"sine", vol:.16}); return; }
+  const f = tickSide ? 1900 : 1500;
+  tone(c, f, t, .03, {type:"square", vol:.035, to:f * .7}); tone(c, f / 3, t, .04, {type:"sine", vol:.08, to:f / 5});
 }
 // a short "tock" on every button
 function playClick(){ const c = audio(); if (!c) return; const t = c.currentTime; tone(c, 1250, t, .045, {type:"square", vol:.07, to:700}); tone(c, 420, t, .06, {type:"sine", vol:.14, to:260}); }
@@ -670,12 +680,21 @@ function drawReveal(s){
 }
 
 /* ---------- timer ---------- */
+let lastTick = "";
 setInterval(() => {
   if (!state || (state.phase !== "round" && state.phase !== "reveal")) return;
   const total = state.phase === "round" ? state.roundMs : state.revealMs;
   const left = Math.max(0, deadline - Date.now());
   $("#timefill").style.transform = `scaleX(${(left / total).toFixed(3)})`;
-  $("#secs").textContent = Math.ceil(left / 1000);
+  const sec = Math.ceil(left / 1000);
+  $("#secs").textContent = sec;
+  const hurry = state.phase === "round" && sec > 0 && sec <= 5;
+  $("#secs").classList.toggle("hurry", hurry);
+  const tk = state.code + ":" + state.round + ":" + sec;
+  if (state.phase === "round" && sec > 0 && tk !== lastTick){
+    if (lastTick.startsWith(state.code + ":" + state.round + ":")) playTick(hurry);   // not on the very first frame of a round
+    lastTick = tk;
+  }
   if (state.phase === "reveal") $("#nextIn").textContent = left > 0 ? `Next in ${Math.ceil(left/1000)}s` : "";
 }, 100);
 
