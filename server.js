@@ -139,16 +139,18 @@ function startGame(t, rounds) {
   t.players.forEach(p => { p.score = 0; p.guess = null; });
   t.round = 0; t.swapped = -1; beginRound(t);
 }
-// A photo that won't load (deleted on Commons, say) is swapped for another one, once per round
+// A photo that won't load (deleted on Commons, say) is swapped for another one (up to 3 times per round)
 function swapBroken(t, id) {
-  if (t.phase !== "round" || t.order[t.round] !== id || t.swapped === t.round) return false;
+  if (t.phase !== "round" || t.order[t.round] !== id) return false;
+  if (t.swapped !== t.round) { t.swapped = t.round; t.swaps = 0; }
+  if (t.swaps >= 3) return false;
   const bad = byId.get(id); if (bad) bad.broken = true;
   const players = [...t.players.values()];
   const inGame = new Set(t.order);
   const rep = shuffle(playable().filter(p => !inGame.has(p.id) && !t.played.has(p.id) && !players.some(x => x.seen.has(p.id))))[0]
     || shuffle(playable().filter(p => !inGame.has(p.id)))[0];
   if (!rep) return false;
-  t.order[t.round] = rep.id; t.played.add(rep.id); players.forEach(x => x.seen.add(rep.id)); t.swapped = t.round;
+  t.order[t.round] = rep.id; t.played.add(rep.id); players.forEach(x => x.seen.add(rep.id)); t.swaps++;
   log(`Photo ${id} would not load at table ${t.code}; swapped for ${rep.id}`);
   beginRound(t);
   return true;
