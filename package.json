@@ -1,0 +1,11 @@
+{
+  "name": "what-year",
+  "version": "2.0.0",
+  "private": true,
+  "description": "WHAT YEAR? Party game: guess the decade of real old photos, with tables for friends over the internet",
+  "scripts": {
+    "start": "node server.js",
+    "build-bank": "node build-bank.js 1000"
+  },
+  "engines": { "node": ">=18" }
+}
