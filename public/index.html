@@ -414,6 +414,9 @@ async function api(path, data){
   return j;
 }
 
+/* ---------- visitor stats (GoatCounter: no cookies, nothing personal) ---------- */
+function track(name){ try { window.goatcounter?.count?.({ path: name, title: name, event: true }); } catch {} }
+
 /* ---------- sounds (made in the browser, no sound files) ---------- */
 const sfx = { ctx: null, on: true };
 try { sfx.on = localStorage.getItem("wySound") !== "off"; } catch {}
@@ -536,14 +539,14 @@ async function leave(silent){
   if (location.hash) history.replaceState(null, "", location.pathname);
   $("#tableChip").hidden = true; $("#exitBtn").hidden = true; closeExit(); show("vHome"); pollInfo();
 }
-$("#create").onclick = async () => { if (needName()) return; try { homeStatus("Setting up your table…"); const r = await api("/api/table", joinData()); homeStatus(""); connect(r.code, r.pid); } catch(e){ homeStatus(e.message, true); } };
-$("#solo").onclick = async () => { if (needName()) return; try { const r = await api("/api/table", joinData()); connect(r.code, r.pid); soloStart = true; } catch(e){ homeStatus(e.message, true); } };
+$("#create").onclick = async () => { if (needName()) return; try { homeStatus("Setting up your table…"); const r = await api("/api/table", joinData()); homeStatus(""); connect(r.code, r.pid); track("table-created"); } catch(e){ homeStatus(e.message, true); } };
+$("#solo").onclick = async () => { if (needName()) return; try { const r = await api("/api/table", joinData()); connect(r.code, r.pid); soloStart = true; track("solo-game"); } catch(e){ homeStatus(e.message, true); } };
 let soloStart = false;
 $("#joinBtn").onclick = async () => {
   if (needName()) return;
   const c = $("#joinCode").value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
   if (c.length !== 4) return homeStatus("The code has 4 letters or numbers.", true);
-  try { const r = await api(`/api/table/${c}/join`, joinData()); homeStatus(""); connect(r.code, r.pid); } catch(e){ homeStatus(e.message, true); }
+  try { const r = await api(`/api/table/${c}/join`, joinData()); homeStatus(""); connect(r.code, r.pid); track("joined-table"); } catch(e){ homeStatus(e.message, true); }
 };
 $("#joinCode").addEventListener("keydown", e => { if (e.key === "Enter") $("#joinBtn").click(); });
 let exitReturn = null;
@@ -575,7 +578,7 @@ $("#copyLink").onclick = async () => {
 })();
 $("#copyCode").onclick = async () => { try { await navigator.clipboard.writeText(state.code); toast("Code copied"); } catch { toast("The code is " + state.code); } };
 $("#roundsSeg").addEventListener("click", e => { const b = e.target.closest("button[data-n]"); if (!b) return; rounds = +b.dataset.n; [...$("#roundsSeg").children].forEach(x => x.setAttribute("aria-pressed", String(x === b))); });
-$("#startBtn").onclick = async () => { try { await api(`/api/table/${state.code}/start`, {pid:session.pid, rounds}); } catch(e){ $("#lobbyStatus").textContent = e.message; } };
+$("#startBtn").onclick = async () => { try { await api(`/api/table/${state.code}/start`, {pid:session.pid, rounds}); track("game-started"); } catch(e){ $("#lobbyStatus").textContent = e.message; } };
 $("#nextBtn").onclick = () => api(`/api/table/${state.code}/next`, {pid:session.pid}).catch(() => {});
 $("#againBtn").onclick = () => api(`/api/table/${state.code}/again`, {pid:session.pid}).catch(() => {});
 
@@ -647,7 +650,7 @@ function render(){
       const order = [[rank[1],"p2",2],[rank[0],"p1",1],[rank[2],"p3",3]];
       $("#podium").innerHTML = order.map(([p,c,n]) => p ? `<div class="pod ${c}">${dot(p,"av")}<span class="nm">${esc(p.name)}</span><span class="sc">${p.score} pts</span><div class="blk">${n}</div></div>` : "").join("");
       $("#finalList").innerHTML = rank.map((p,i) => `<div class="res ${i===0 ? "top" : ""}">${dot(p)}<span class="n">${i+1}. ${esc(p.name)}${p.id === s.you ? " (you)" : ""}</span><span class="g"></span><span class="p">${p.score}</span></div>`).join("");
-      burst(240); playWin();
+      burst(240); playWin(); track("game-finished");
     }
     $("#againBtn").hidden = !s.isHost;
   }
@@ -739,5 +742,6 @@ function stopConfetti(){ bits = []; }
 /* ---------- reconnect after a page reload ---------- */
 try { const sv = JSON.parse(sessionStorage.getItem("wySession")||"null"); if (sv?.code && sv?.pid) connect(sv.code, sv.pid); } catch {}
 </script>
+<script data-goatcounter="https://sofo.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>
