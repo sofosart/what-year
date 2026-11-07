@@ -416,6 +416,8 @@ async function api(path, data){
 
 /* ---------- visitor stats (GoatCounter: no cookies, nothing personal) ---------- */
 function track(name){ try { window.goatcounter?.count?.({ path: name, title: name, event: true }); } catch {} }
+// the nickname each player types (e.g. "S", "Maria"), so the stats show who played
+function trackPlayer(){ const n = String(me.name || "").replace(/[\u0000-\u001f/?#]/g, "").trim().slice(0, 16); if (n) track("player: " + n); }
 
 /* ---------- sounds (made in the browser, no sound files) ---------- */
 const sfx = { ctx: null, on: true };
@@ -539,14 +541,14 @@ async function leave(silent){
   if (location.hash) history.replaceState(null, "", location.pathname);
   $("#tableChip").hidden = true; $("#exitBtn").hidden = true; closeExit(); show("vHome"); pollInfo();
 }
-$("#create").onclick = async () => { if (needName()) return; try { homeStatus("Setting up your table…"); const r = await api("/api/table", joinData()); homeStatus(""); connect(r.code, r.pid); track("table-created"); } catch(e){ homeStatus(e.message, true); } };
-$("#solo").onclick = async () => { if (needName()) return; try { const r = await api("/api/table", joinData()); connect(r.code, r.pid); soloStart = true; track("solo-game"); } catch(e){ homeStatus(e.message, true); } };
+$("#create").onclick = async () => { if (needName()) return; try { homeStatus("Setting up your table…"); const r = await api("/api/table", joinData()); homeStatus(""); connect(r.code, r.pid); track("table-created"); trackPlayer(); } catch(e){ homeStatus(e.message, true); } };
+$("#solo").onclick = async () => { if (needName()) return; try { const r = await api("/api/table", joinData()); connect(r.code, r.pid); soloStart = true; track("solo-game"); trackPlayer(); } catch(e){ homeStatus(e.message, true); } };
 let soloStart = false;
 $("#joinBtn").onclick = async () => {
   if (needName()) return;
   const c = $("#joinCode").value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
   if (c.length !== 4) return homeStatus("The code has 4 letters or numbers.", true);
-  try { const r = await api(`/api/table/${c}/join`, joinData()); homeStatus(""); connect(r.code, r.pid); track("joined-table"); } catch(e){ homeStatus(e.message, true); }
+  try { const r = await api(`/api/table/${c}/join`, joinData()); homeStatus(""); connect(r.code, r.pid); track("joined-table"); trackPlayer(); } catch(e){ homeStatus(e.message, true); }
 };
 $("#joinCode").addEventListener("keydown", e => { if (e.key === "Enter") $("#joinBtn").click(); });
 let exitReturn = null;
